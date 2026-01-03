@@ -1,0 +1,50 @@
+@startuml
+' C4 Context
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+LAYOUT_WITH_LEGEND()
+
+Person(customer, "Клиент", "Открывает депозит онлайн")
+Person_Ext(cc_agent, "Агент кол-центра", "Обзванивает лиды, может назначать спецставки")
+Person_Ext(bo_dep, "Менеджер бэк-офиса депозитов", "Оформляет депозит в АБС")
+
+System_Ext(telco, "Телеком-оператор", "Доставка СМС")
+
+System_Boundary(bank, "Банк «Стандарт»") {
+  System(site, "Сайт", "PHP + React", "Просмотр ставок, заявка на депозит")
+  System(ib, "Интернет-банк", "ASP.NET MVC 4.5", "ЛК клиента")
+  System(catalog, "Catalog API", "REST", "Витрина депозитов и персонализация")
+  System(rate, "Сервис ставок + Admin UI", "Java/.NET + PostgreSQL", "Централизация ставок, аудит")
+  System(appapi, "App API (депозитные заявки)", "REST + PostgreSQL", "Приём заявок/лидов, статусы, аудит")
+  System(queue, "Kafka", "Event bus", "События заявок и ставок")
+  System(otp, "OTP-сервис", "Stateless", "Генерация/валидация OTP")
+  System(cc, "Система кол-центра", "React + Spring Boot", "Работа с лидами")
+  System(smsgw, "СМС-шлюз", "Внутренний", "Отправка СМС")
+  System(abs, "АБС", "Delphi + Oracle", "Оформление депозитов, проводки")
+}
+
+Rel(customer, site, "Смотрит продукты, оставляет заявку", "TLS")
+Rel(customer, ib, "Подаёт и подтверждает заявку", "TLS")
+
+Rel(site, catalog, "GET /deposits")
+Rel(catalog, rate, "Чтение ставок (актуальные/спец)")
+Rel(site, appapi, "POST /leads", "TLS")
+
+Rel(ib, catalog, "GET /deposits?clientId")
+Rel(ib, appapi, "POST /applications", "TLS")
+Rel(ib, otp, "Запрос OTP")
+Rel(otp, smsgw, "Отправка СМС OTP")
+Rel(smsgw, telco, "Шлюз → оператор")
+
+Rel(appapi, queue, "event.lead.created / event.application.created")
+Rel(cc, queue, "consume lead.*")
+Rel(cc_agent, cc, "Обработка лида/звонок")
+Rel(cc, rate, "Назначение спецставки (RBAC, аудит)")
+Rel(rate, queue, "event.rate.updated")
+
+Rel(queue, abs, "application.* для БО-обработки")
+Rel(bo_dep, abs, "Оформляет депозит")
+Rel(abs, appapi, "Статусы/результаты (callback/DB-poll)")
+Rel(appapi, smsgw, "СМС статусы")
+
+@enduml
+

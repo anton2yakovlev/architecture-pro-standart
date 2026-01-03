@@ -1,0 +1,95 @@
+@startuml
+' C4 Containers
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+LAYOUT_WITH_LEGEND()
+
+Person(customer, "Клиент")
+Person_Ext(cc_agent, "Агент кол-центра")
+Person_Ext(bo_dep, "Менеджер бэк-офиса депозитов")
+System_Ext(telco, "Телеком-оператор", "Доставка СМС")
+
+System_Boundary(bank, "Банк «Стандарт»") {
+
+  System_Boundary(ib_sys, "Интернет-банк") {
+    Container(ib_monolith, "IB Monolith", "ASP.NET MVC 4.5", "UI и базовая логика авторизации")
+    ContainerDb(ibdb, "IB DB", "MS SQL", "Данные ИБ, профили клиентов")
+    Container(bff, "IB BFF", ".NET 6 / Java 17", "Оркестрация потока открытия депозитов, API")
+    Container(otp, "OTP Service", "Stateless", "Генерация/валидация OTP")
+  }
+
+  System_Boundary(dep_svc, "Депозитные сервисы") {
+    Container(catalog, "Catalog API", ".NET/Java + Redis", "Витрина депозитов, персонализация")
+    Container(rate, "Rate Service + Admin UI", "Java/.NET", "Централизация ставок, RBAC, аудит")
+    ContainerDb(ratedb, "Rates DB", "PostgreSQL", "Ставки и журнал изменений")
+    Container(appapi, "App API (applications/leads)", "FastAPI/.NET/Java", "Приём заявок/лидов, статусы, идемпотентность")
+    ContainerDb(appdb, "Applications DB", "PostgreSQL", "Заявки/лиды, аудит")
+    Container(queue, "Kafka", "Event bus", "event.application.*, event.rate.*")
+    Container(smsgw, "СМС-шлюз", "Внутренний", "Отправка СМС")
+  }
+
+  System_Boundary(cc_sys, "Система кол-центра") {
+    Container(cc, "CRM КЦ", "React + Spring Boot", "Обработка лидов, скрипты")
+    ContainerDb(ccdb, "CC DB", "PostgreSQL", "Лиды/звонки")
+  }
+
+  System_Boundary(site_sys, "Сайт") {
+    Container(site_frontend, "Site Frontend", "PHP + React", "Публичный сайт")
+    Container(lead_api, "Lead API", "REST", "Приём лидов с сайта")
+  }
+
+  System_Boundary(abs_sys, "АБС") {
+    Container(abs_ui, "ABS Desktop", "Delphi", "Рабочее место БО")
+    ContainerDb(absdb, "ABS DB", "Oracle", "Операционные данные")
+    Container(abs_int, "ABS Integration", "PL/SQL пакет/стейджинг", "Импорт заявок, обновление статусов")
+    Container(bo_worker, "БО-воркер", "Python/Java/.NET", "Потребляет Kafka, формирует задачи для АБС")
+  }
+}
+
+' Пользователи
+Rel(customer, site_frontend, "Работает с сайтом", "HTTPS")
+Rel(customer, ib_monolith, "Авторизация в ИБ", "HTTPS")
+Rel(customer, bff, "Формы/API через ИБ", "HTTPS")
+
+' Связи сайта
+Rel(site_frontend, catalog, "GET /deposits", "HTTPS")
+Rel(site_frontend, lead_api, "POST /leads", "HTTPS")
+Rel(lead_api, appapi, "Создание лида", "HTTPS")
+
+' Связи ИБ
+Rel(ib_monolith, ibdb, "CRUD")
+Rel(ib_monolith, bff, "Вызовы BFF", "HTTPS")
+Rel(bff, catalog, "GET /deposits?clientId", "HTTPS")
+Rel(bff, appapi, "POST /applications", "HTTPS")
+Rel(bff, otp, "POST /otp")
+Rel(otp, smsgw, "Отправка СМС OTP")
+Rel(smsgw, telco, "Шлюз → оператор")
+
+' Ставки
+Rel(catalog, rate, "Чтение актуальных/спецставок", "REST")
+Rel(catalog, ibdb, "Чтение профиля/персонализации (read-only реплика)", "SQL") #grey;line.dashed
+Rel(rate, ratedb, "CRUD")
+
+' Заявки/лиды и события
+Rel(appapi, appdb, "CRUD")
+Rel(appapi, queue, "Публикация event.application.*")
+Rel(lead_api, queue, "Публикация event.lead.created")
+Rel(cc, queue, "Подписка consume lead.*")
+Rel(cc_agent, cc, "Обзор/обзвон лидов", "UI")
+Rel(cc, rate, "Назначение спецставки (Admin UI)")
+Rel(rate, queue, "Публикация event.rate.updated")
+
+' Интеграция с АБС (через стейджинг, без прямых вызовов ИБ→АБС)
+Rel(bo_worker, queue, "consume application.*")
+Rel(bo_worker, abs_int, "Импорт заявок в стейджинг")
+Rel(bo_dep, abs_ui, "Оформляет депозит")
+Rel(abs_ui, absdb, "Операции")
+Rel(abs_int, absdb, "Импорт/обновление по регламенту")
+Rel(abs_int, appapi, "Статусы/результат (callback/DB-poll)")
+Rel(appapi, smsgw, "СМС о статусах")
+
+' Примечание об изоляции АБС
+UpdateElementStyle(abs_sys, $bgColor="#fff7cc")
+AddProperty(abs_sys, "Правило", "Нет прямых онлайн-вызовов ИБ → АБС")
+
+@enduml
+
