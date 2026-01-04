@@ -1,0 +1,59 @@
+@startuml
+!include <C4/C4_Container>
+
+!define FONTAWESOME https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/master/font-awesome-5
+!include FONTAWESOME/users.puml
+
+title Онлайн-заявка на кредит
+
+Person(user, "Клиент", "Клиент банка", $sprite="users")
+
+Boundary(ib_sys, "Интернет-банк") {
+    Container(ib, "IB Monolith", "ASP.NET MVC 4.5", "UI")
+    ContainerDb(ibdb, "IB DB", "MS SQL", "Данные ИБ")
+    Container(bff, "Credit BFF", ".NET/Java", "Оркестрация потока, OTP")
+    Container(otp, "OTP Service", "Stateless", "Генерация/валидация OTP")
+}
+
+Boundary(credit_svc, "Кредитные сервисы") {
+    Container(offers, "Offers API", ".NET/Java + Redis", "Предодобренные предложения")
+    Container(appapi, "Credit App API", "FastAPI/.NET/Java", "Заявки, статусы, аудит")
+    ContainerDb(appdb, "Credit DB", "PostgreSQL", "Заявки/статусы")
+    Container(queue, "Kafka", "Event bus", "application.*")
+}
+
+Boundary(conveyor_sys, "Кредитный конвейер") {
+    Container(camunda, "Camunda BPM", "Java + Oracle", "Маршрутизация заявок")
+    Container(score, "Scoring Service", "Python", "ML-модель скоринга")
+}
+
+Boundary(abs_sys, "АБС") {
+    Container(abs_int, "ABS Integration", "PL/SQL/стейджинг", "Импорт договоров")
+    ContainerDb(absdb, "ABS DB", "Oracle", "Операционные данные")
+}
+
+System_Ext(bki, "БКИ", "REST API")
+System_Ext(telecom, "Телеком-оператор")
+Container(smsgw, "СМС-шлюз", "Внутренний", "Отправка СМС")
+
+Rel(user, ib, "Работа с ИБ", "HTTPS")
+Rel(ib, offers, "GET /offers", "HTTPS")
+Rel(ib, bff, "POST /applications", "HTTPS")
+Rel(bff, otp, "POST /otp")
+Rel(bff, appapi, "POST /applications", "HTTPS")
+Rel(appapi, appdb, "CRUD")
+Rel(appapi, queue, "Публикация application.created")
+Rel(queue, camunda, "consume application.*")
+Rel(camunda, score, "POST /score")
+Rel(score, bki, "REST БКИ")
+Rel(camunda, appapi, "Решение/статусы")
+Rel(appapi, abs_int, "Финализация через стейджинг")
+Rel(abs_int, absdb, "Импорт/проводки")
+Rel(appapi, smsgw, "СМС о статусах")
+Rel(smsgw, telecom, "Доставка СМС")
+
+UpdateElementStyle(abs_sys, $bgColor="#fff7cc")
+AddProperty(abs_sys, "Правило", "Нет прямых онлайн-вызовов ИБ → АБС")
+
+@enduml
+
