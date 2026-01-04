@@ -1,0 +1,37 @@
+@startuml
+!include <C4/C4_Context>
+
+!define FONTAWESOME https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/master/font-awesome-5
+!include FONTAWESOME/users.puml
+
+title Онлайн-заявка на кредит
+
+Person(user, "Клиент", "Клиент банка", $sprite="users")
+
+System(internetBank, "Интернет-банк")
+System(site, "Сайт")
+System(creditBFF, "Credit BFF", "Оркестратор потока")
+System(offers, "Offers API", "Предодобренные предложения")
+System(appapi, "Credit App API", "Заявки на кредит")
+System(conveyor, "Кредитный конвейер", "Обработка заявок")
+System(scoring, "Скоринг", "Оценка риска")
+System(abs, "АБС", "Автоматизированная банковская система")
+
+System_Ext(bki, "БКИ", "Бюро кредитных историй")
+System_Ext(telecom, "Система телеком оператора")
+
+Rel(user, internetBank, "Просмотр кредитов/Подача заявки")
+Rel(user, site, "Подача заявки с сайта")
+Rel(internetBank, offers, "Получение предодобренных предложений")
+Rel(internetBank, creditBFF, "Создание заявки")
+Rel(site, creditBFF, "Создание заявки")
+Rel(creditBFF, appapi, "Создание заявки")
+Rel(appapi, conveyor, "Передача заявки")
+Rel(conveyor, scoring, "Запрос скоринга")
+Rel(scoring, bki, "Получение данных БКИ")
+Rel(conveyor, abs, "Финализация кредита")
+Rel(abs, telecom, "Отправка СМС")
+Rel(telecom, user, "СМС-уведомления")
+
+@enduml
+

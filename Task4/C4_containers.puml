@@ -1,0 +1,40 @@
+@startuml
+!include <C4/C4_Container>
+
+!define FONTAWESOME https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/master/font-awesome-5
+!include FONTAWESOME/users.puml
+
+title Передача ставок в кол-центр
+
+Person(user, "Клиент", "Клиент банка", $sprite="users")
+Person(manager, "Агент кол-центра", "Сотрудник кол-центра", $sprite="users")
+
+Boundary(rate_sys, "Rate Service") {
+    Container(rate_api, "Rate API", "REST", "API для получения ставок")
+    ContainerDb(rate_db, "Rates DB", "PostgreSQL", "База данных ставок")
+}
+
+Boundary(cc_sys, "Система кол-центра") {
+    Container(cc_ui, "CC UI", "React.js", "Веб-интерфейс")
+    Container(cc_be, "CC Backend", "Java Spring Boot", "Бэкенд")
+    ContainerDb(cc_db, "CC DB", "PostgreSQL", "База данных")
+}
+
+Container(rproxy, "Rates Proxy", "Java/.NET", "Кэширующий прокси ставок")
+ContainerDb(rproxy_cache, "Rates Cache", "Redis", "Кэш ставок")
+
+Container(exporter, "Rates Exporter", "Python/Java/.NET", "Экспорт ставок в файлы")
+
+System_Ext(pcc, "Система партнёрского кол-центра", "Внешняя система")
+
+Rel(user, manager, "Звонит в кол-центр")
+Rel(manager, cc_ui, "Просматривает ставки")
+Rel(cc_ui, cc_be, "Запрос ставок", "REST")
+Rel(cc_be, rproxy, "GET /rates", "REST")
+Rel(rproxy, rproxy_cache, "Кэширование")
+Rel(rproxy, rate_api, "GET /rates", "REST")
+Rel(rate_api, rate_db, "Чтение ставок")
+Rel(exporter, rate_api, "GET /rates", "REST")
+Rel(exporter, pcc, "Передача файла", "SFTP/Email")
+
+@enduml

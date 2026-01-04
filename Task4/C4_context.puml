@@ -1,0 +1,26 @@
+@startuml
+!include <C4/C4_Context>
+
+!define FONTAWESOME https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/master/font-awesome-5
+!include FONTAWESOME/users.puml
+
+title Передача ставок в кол-центр
+
+Person(user, "Клиент", "Клиент банка", $sprite="users")
+Person(manager, "Агент кол-центра", "Сотрудник кол-центра", $sprite="users")
+
+System(cc, "Система кол-центра", "CRM кол-центра")
+System(rate, "Rate Service", "Сервис ставок")
+System(rproxy, "Rates Proxy", "Кэширующий прокси ставок")
+System(exporter, "Rates Exporter", "Экспорт ставок в файлы")
+
+System_Ext(pcc, "Система партнёрского кол-центра", "Внешняя система")
+
+Rel(user, manager, "Звонит в кол-центр")
+Rel(manager, cc, "Просматривает актуальные ставки")
+Rel(cc, rproxy, "Запрашивает актуальные ставки")
+Rel(rproxy, rate, "Получает ставки")
+Rel(exporter, rate, "Читает ставки")
+Rel(exporter, pcc, "Передаёт файл со ставками")
+
+@enduml
